@@ -67,6 +67,29 @@ let zip = try OPXYPackage.write(preset: preset, samples: sampleFiles, names: slo
 try zip.write(to: URL(fileURLWithPath: "kit.preset.zip"))
 ```
 
+### OP-XY multisample preset
+
+`c3` and `c4` here are `[Float]` buffers of mono PCM, one per sampled note.
+Zones must be passed in ascending `rootNote` order — the builder splits the
+keyboard between them from that order, not from any key field.
+
+```swift
+import TECore
+import TEOPXY
+
+let zones = [
+    MultisampleZone(samples: c3, sourceSampleRate: 44100, fileName: "c3.wav", rootNote: 60),
+    MultisampleZone(samples: c4, sourceSampleRate: 44100, fileName: "c4.wav", rootNote: 72),
+]
+let preset = MultisamplePresetBuilder.build(name: "keys", zones: zones)
+
+let sampleFiles = try zones.map { zone in
+    try WAVFile(sampleRate: zone.sourceSampleRate, bitDepth: 16, channelCount: 1, samples: zone.samples).encoded()
+}
+let zip = try OPXYPackage.write(preset: preset, samples: sampleFiles, names: zones.map(\.fileName))
+try zip.write(to: URL(fileURLWithPath: "keys.preset.zip"))
+```
+
 ## License
 
 MIT. See LICENSE and NOTICE.md.
