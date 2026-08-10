@@ -138,7 +138,7 @@ public enum MultisamplePresetBuilder {
     }
 
     private static func region(for zone: MultisampleZone, lowKey: Int, targetSampleRate: Int?, gain: Double, loopEnabled: Bool, loopOnRelease: Bool, cutAtLoopEnd: Bool) -> MultisampleRegion {
-        guard !zone.samples.isEmpty else {
+        guard !zone.samples.isEmpty, zone.sourceSampleRate > 0 else {
             return MultisampleRegion(
                 framecount: 0,
                 gain: gain,

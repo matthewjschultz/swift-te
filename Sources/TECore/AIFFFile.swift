@@ -5,6 +5,11 @@ public enum AIFFError: Error, Equatable {
     case notAIFF
     case missingCOMMChunk
     case missingSSNDChunk
+    /// A chunk declares a size that doesn't fit within the file, or is too
+    /// small to hold the fields the format requires it to hold.
+    case truncatedData
+    case invalidChannelCount(Int)
+    case invalidSampleRate
     case unsupportedBitDepth(Int)
 }
 
@@ -28,6 +33,9 @@ public struct AIFFFile {
     public func encoded() throws -> Data {
         guard [8, 16, 24, 32].contains(bitDepth) else {
             throw AIFFError.unsupportedBitDepth(bitDepth)
+        }
+        guard channelCount > 0, channelCount <= Int(Int16.max) else {
+            throw AIFFError.invalidChannelCount(channelCount)
         }
 
         let bytesPerSample = bitDepth / 8
@@ -111,19 +119,36 @@ public struct AIFFFile {
         guard let commRange = chunkRange(ofID: "COMM", in: data) else { throw AIFFError.missingCOMMChunk }
         guard let ssndRange = chunkRange(ofID: "SSND", in: data) else { throw AIFFError.missingSSNDChunk }
 
+        // A COMM body is 18 bytes: channels (2), frames (4), bit depth (2),
+        // sample rate (10). Both the declared size and the file's actual
+        // extent have to cover that before any field is read.
         let commBodyStart = commRange.lowerBound + 8
+        let commBodySize = Int(readU32BE(data, at: commRange.lowerBound + 4))
+        guard commBodySize >= 18, commBodyStart + commBodySize <= data.count else {
+            throw AIFFError.truncatedData
+        }
+
         let channelCount = Int(readU16BE(data, at: commBodyStart))
+        guard channelCount > 0 else { throw AIFFError.invalidChannelCount(channelCount) }
         let bitDepth = Int(readU16BE(data, at: commBodyStart + 6))
         guard [8, 16, 24, 32].contains(bitDepth) else {
             throw AIFFError.unsupportedBitDepth(bitDepth)
         }
         let sampleRateBytes = Array(data.subdata(in: (commBodyStart + 8)..<(commBodyStart + 18)))
-        let sampleRate = Int(extended80ToDouble(sampleRateBytes).rounded())
+        let sampleRateValue = extended80ToDouble(sampleRateBytes).rounded()
+        guard sampleRateValue >= 1, sampleRateValue <= Double(Int32.max) else {
+            throw AIFFError.invalidSampleRate
+        }
+        let sampleRate = Int(sampleRateValue)
 
+        // An SSND body starts with offset (4) and block size (4); the sample
+        // data is whatever the declared size covers past those.
         let ssndBodyStart = ssndRange.lowerBound + 8
         let ssndDataStart = ssndBodyStart + 8 // past offset + blockSize
         let ssndChunkSize = Int(readU32BE(data, at: ssndRange.lowerBound + 4))
+        guard ssndChunkSize >= 8 else { throw AIFFError.truncatedData }
         let sampleDataEnd = ssndBodyStart + ssndChunkSize
+        guard sampleDataEnd <= data.count else { throw AIFFError.truncatedData }
         let sampleData = data.subdata(in: ssndDataStart..<sampleDataEnd)
         let samples = readSamples(sampleData, bitDepth: bitDepth)
 

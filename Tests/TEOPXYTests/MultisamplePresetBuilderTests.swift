@@ -50,6 +50,19 @@ final class MultisamplePresetBuilderTests: XCTestCase {
         XCTAssertEqual(preset.platform, "OP-XY")
     }
 
+    func testZeroSourceSampleRateProducesDegenerateRegionWithoutCrashing() {
+        // Dividing the sample count by a zero rate yields an infinite
+        // duration, which has no representation as a frame count.
+        let zone = MultisampleZone(samples: [0.1, 0.2], sourceSampleRate: 0, fileName: "a.wav", rootNote: 60)
+        let preset = MultisamplePresetBuilder.build(name: "keys", zones: [zone])
+        XCTAssertEqual(preset.regions.count, 1)
+        XCTAssertEqual(preset.regions[0].framecount, 0)
+        XCTAssertEqual(preset.regions[0].sampleStart, 0)
+        XCTAssertEqual(preset.regions[0].sampleEnd, 0)
+        XCTAssertEqual(preset.regions[0].loopStart, 0)
+        XCTAssertEqual(preset.regions[0].loopEnd, 0)
+    }
+
     func testEmptySampleZoneProducesDegenerateRegionWithoutCrashing() {
         let zone = MultisampleZone(samples: [], sourceSampleRate: 44100, fileName: "empty.wav", rootNote: 60)
         let preset = MultisamplePresetBuilder.build(name: "keys", zones: [zone])

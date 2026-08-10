@@ -5,6 +5,11 @@ public enum WAVError: Error, Equatable {
     case notWAVE
     case missingFmtChunk
     case missingDataChunk
+    /// The named chunk declares a size too small to hold the fields the
+    /// format requires it to hold.
+    case truncatedChunk(String)
+    case invalidChannelCount(Int)
+    case invalidSampleRate(Int)
     case unsupportedBitDepth(Int)
 }
 
@@ -33,6 +38,12 @@ public struct WAVFile {
     public func encoded() throws -> Data {
         guard [8, 16, 24, 32].contains(bitDepth) else {
             throw WAVError.unsupportedBitDepth(bitDepth)
+        }
+        guard channelCount > 0, channelCount <= Int(UInt16.max) else {
+            throw WAVError.invalidChannelCount(channelCount)
+        }
+        guard sampleRate > 0, sampleRate <= Int(UInt32.max) else {
+            throw WAVError.invalidSampleRate(sampleRate)
         }
 
         let bytesPerSample = bitDepth / 8
@@ -137,10 +148,10 @@ public struct WAVFile {
         var foundData = false
 
         func u32(_ at: Int) -> UInt32 {
-            data.subdata(in: at..<(at + 4)).withUnsafeBytes { $0.load(as: UInt32.self) }.littleEndian
+            data.subdata(in: at..<(at + 4)).withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: UInt32.self) }.littleEndian
         }
         func u16(_ at: Int) -> UInt16 {
-            data.subdata(in: at..<(at + 2)).withUnsafeBytes { $0.load(as: UInt16.self) }.littleEndian
+            data.subdata(in: at..<(at + 2)).withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: UInt16.self) }.littleEndian
         }
 
         while offset + 8 <= data.count {
@@ -150,11 +161,17 @@ public struct WAVFile {
             guard chunkStart + chunkSize <= data.count else { break }
 
             if chunkID == "fmt " {
+                // The fields read below all live within the first 16 bytes of
+                // the body; a smaller declared size means they'd be read from
+                // whatever follows the chunk.
+                guard chunkSize >= 16 else { throw WAVError.truncatedChunk("fmt ") }
                 foundFmt = true
                 channelCount = Int(u16(chunkStart + 2))
                 sampleRate = Int(u32(chunkStart + 4))
                 bitDepth = Int(u16(chunkStart + 14))
             } else if chunkID == "smpl" {
+                // Loop points live at +44/+48, so the body must reach 52 bytes.
+                guard chunkSize >= 52 else { throw WAVError.truncatedChunk("smpl") }
                 let midiUnityNote = u32(chunkStart + 12)
                 rootNote = midiUnityNote == 0xFFFFFFFF ? nil : Int(midiUnityNote)
                 loopStart = Int(u32(chunkStart + 44)) + 1
@@ -172,6 +189,8 @@ public struct WAVFile {
         guard [8, 16, 24, 32].contains(bitDepth) else {
             throw WAVError.unsupportedBitDepth(bitDepth)
         }
+        guard channelCount > 0 else { throw WAVError.invalidChannelCount(channelCount) }
+        guard sampleRate > 0 else { throw WAVError.invalidSampleRate(sampleRate) }
 
         return WAVFile(sampleRate: sampleRate, bitDepth: bitDepth, channelCount: channelCount, samples: samples, rootNote: rootNote, loopStart: loopStart, loopEnd: loopEnd)
     }
@@ -184,7 +203,7 @@ public struct WAVFile {
         case 16:
             var i = 0
             while i + 1 < data.count {
-                let v = data.subdata(in: i..<(i + 2)).withUnsafeBytes { $0.load(as: Int16.self) }.littleEndian
+                let v = data.subdata(in: i..<(i + 2)).withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: Int16.self) }.littleEndian
                 samples.append(Float(v) / 32767)
                 i += 2
             }
@@ -199,7 +218,7 @@ public struct WAVFile {
         case 32:
             var i = 0
             while i + 3 < data.count {
-                let v = data.subdata(in: i..<(i + 4)).withUnsafeBytes { $0.load(as: Int32.self) }.littleEndian
+                let v = data.subdata(in: i..<(i + 4)).withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: Int32.self) }.littleEndian
                 samples.append(Float(v) / 2_147_483_647)
                 i += 4
             }

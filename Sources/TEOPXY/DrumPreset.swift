@@ -119,16 +119,15 @@ public enum DrumPresetBuilder {
     }
 
     private static func region(for slot: DrumSlot, midiNote: Int, targetSampleRate: Int?) -> DrumRegion {
-        let duration = Double(slot.samples.count) / Double(slot.sourceSampleRate)
-
         let framecount: Int
         let sampleStart: Int
         let sampleEnd: Int
-        if slot.samples.isEmpty {
+        if slot.samples.isEmpty || slot.sourceSampleRate <= 0 {
             framecount = 0
             sampleStart = 0
             sampleEnd = 0
         } else {
+            let duration = Double(slot.samples.count) / Double(slot.sourceSampleRate)
             let effectiveSampleRate = targetSampleRate ?? slot.sourceSampleRate
             framecount = Int((duration * Double(effectiveSampleRate)).rounded(.down))
 

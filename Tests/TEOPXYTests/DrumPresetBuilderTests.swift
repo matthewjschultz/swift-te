@@ -49,6 +49,17 @@ final class DrumPresetBuilderTests: XCTestCase {
         XCTAssertEqual(regions[0].sampleEnd, 0)
     }
 
+    func testZeroSourceSampleRateProducesDegenerateRegionWithoutCrashing() {
+        // Dividing the sample count by a zero rate yields an infinite
+        // duration, which has no representation as a frame count.
+        let slot = DrumSlot(samples: [0.1, 0.2], sourceSampleRate: 0, fileName: "kick.wav")
+        let regions = DrumPresetBuilder.regions(for: [slot], targetSampleRate: nil)
+        XCTAssertEqual(regions.count, 1)
+        XCTAssertEqual(regions[0].framecount, 0)
+        XCTAssertEqual(regions[0].sampleStart, 0)
+        XCTAssertEqual(regions[0].sampleEnd, 0)
+    }
+
     func testBuildProducesNamedPresetFromBaseDefaults() {
         let slot = DrumSlot(samples: [Float](repeating: 0.1, count: 1000), sourceSampleRate: 44100, fileName: "kick.wav")
         let preset = DrumPresetBuilder.build(name: "my-kit", slots: [slot])

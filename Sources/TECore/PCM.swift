@@ -19,7 +19,7 @@ public enum PCM {
     /// Linear-interpolation resample. Identity when rates match.
     public static func resample(_ input: [Float], from sourceRate: Int, to targetRate: Int) -> [Float] {
         guard sourceRate != targetRate else { return input }
-        guard !input.isEmpty, targetRate > 0 else { return [] }
+        guard !input.isEmpty, sourceRate > 0, targetRate > 0 else { return [] }
         let outCount = Int((Double(input.count) * Double(targetRate) / Double(sourceRate)).rounded())
         guard outCount > 0 else { return [] }
         let lastIndex = input.count - 1

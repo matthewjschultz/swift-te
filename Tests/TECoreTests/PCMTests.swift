@@ -19,6 +19,12 @@ final class PCMTests: XCTestCase {
         XCTAssertEqual(output.count, 500)
     }
 
+    func testResampleReturnsEmptyForZeroSourceRate() {
+        // Scaling source positions by 1/sourceRate produces infinity, which
+        // then has no representation as an index.
+        XCTAssertEqual(PCM.resample([0.1, 0.2, 0.3], from: 0, to: 44100), [])
+    }
+
     func testPeakFindsMaxAbsoluteValue() {
         XCTAssertEqual(PCM.peak([0.1, -0.8, 0.3]), 0.8, accuracy: 0.0001)
     }
