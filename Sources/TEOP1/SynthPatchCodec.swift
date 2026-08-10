@@ -5,6 +5,9 @@ public enum SynthPatchCodecError: Error, Equatable {
     case missingSSNDChunk
     case missingAPPLChunk
     case malformedJSON
+    /// The patch couldn't be serialized to JSON — `JSONEncoder` rejects
+    /// non-conforming `Double`s such as `.nan` and `.infinity`.
+    case encodingFailed
 }
 
 public enum SynthPatchCodec {
@@ -15,8 +18,10 @@ public enum SynthPatchCodec {
     /// size is a multiple of 2 bytes, matching that path exactly.
     public static func encode(_ patch: SynthPatch, samples: [Float], sampleRate: Int) throws -> Data {
         let base = try AIFFFile(sampleRate: sampleRate, bitDepth: 16, channelCount: 1, samples: samples).encoded()
-        let jsonData = (try? JSONEncoder().encode(patch)) ?? Data()
-        return spliceAPPLChunk(into: base, jsonData: jsonData, paddingMultiple: 2)
+        guard let jsonData = try? JSONEncoder().encode(patch) else {
+            throw SynthPatchCodecError.encodingFailed
+        }
+        return try spliceAPPLChunk(into: base, jsonData: jsonData, paddingMultiple: 2)
     }
 
     public static func decode(_ data: Data) throws -> SynthPatch {
@@ -28,9 +33,9 @@ public enum SynthPatchCodec {
         }
     }
 
-    static func spliceAPPLChunk(into aiffData: Data, jsonData: Data, paddingMultiple: Int) -> Data {
+    static func spliceAPPLChunk(into aiffData: Data, jsonData: Data, paddingMultiple: Int) throws -> Data {
         guard let ssndRange = AIFFFile.chunkRange(ofID: "SSND", in: aiffData) else {
-            return aiffData
+            throw SynthPatchCodecError.missingSSNDChunk
         }
         let ssndOffset = ssndRange.lowerBound
 

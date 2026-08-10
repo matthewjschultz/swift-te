@@ -17,8 +17,11 @@ public enum DrumPatchCodec {
         var clamped = patch
         clamped.clampSlotBounds()
         let base = try AIFFFile(sampleRate: sampleRate, bitDepth: 16, channelCount: 1, samples: samples).encoded()
-        let jsonData = (try? JSONEncoder().encode(clamped)) ?? Data()
-        return SynthPatchCodec.spliceAPPLChunk(into: base, jsonData: jsonData, paddingMultiple: 4)
+        // DrumPatch is all-integer today, so `encode` can't currently fail —
+        // but propagate rather than swallow, so adding a floating-point field
+        // later surfaces the failure instead of writing a garbage chunk.
+        let jsonData = try JSONEncoder().encode(clamped)
+        return try SynthPatchCodec.spliceAPPLChunk(into: base, jsonData: jsonData, paddingMultiple: 4)
     }
 
     public static func decode(_ data: Data) throws -> DrumPatch {

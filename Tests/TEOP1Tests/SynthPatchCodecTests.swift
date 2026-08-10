@@ -14,6 +14,27 @@ final class SynthPatchCodecTests: XCTestCase {
         XCTAssertEqual(decodedAIFF.samples.count, 1000)
     }
 
+    func testEncodeThrowsWhenPatchCannotBeSerialized() {
+        // JSONEncoder rejects non-conforming Doubles by default. Swallowing
+        // that produced an AIFF with an empty op-1 chunk, reported as success.
+        var patch = SynthPatch.synthSample(baseFrequency: 440.0)
+        patch.baseFreq = .nan
+        XCTAssertThrowsError(try SynthPatchCodec.encode(patch, samples: [0, 0, 0, 0], sampleRate: 44100)) { error in
+            XCTAssertEqual(error as? SynthPatchCodecError, .encodingFailed)
+        }
+    }
+
+    func testSpliceThrowsWhenSSNDChunkIsAbsent() throws {
+        // A FORM/AIFF container carrying only a COMM chunk: there's nowhere to
+        // splice the op-1 payload, which used to return the input unchanged.
+        var aiff = Data("FORM".utf8)
+        aiff.append(contentsOf: [0, 0, 0, 4])
+        aiff.append(contentsOf: Array("AIFF".utf8))
+        XCTAssertThrowsError(try SynthPatchCodec.spliceAPPLChunk(into: aiff, jsonData: Data("{}".utf8), paddingMultiple: 2)) { error in
+            XCTAssertEqual(error as? SynthPatchCodecError, .missingSSNDChunk)
+        }
+    }
+
     func testRoundTripDecodesSamePatch() throws {
         let patch = SynthPatch.synthSample(baseFrequency: 330.0)
         let samples: [Float] = Array(repeating: 0.2, count: 500)
