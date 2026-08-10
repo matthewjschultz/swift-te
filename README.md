@@ -17,7 +17,7 @@ NOTICE.md for full credit.
 Add it as a package dependency:
 
 ```swift
-.package(url: "https://github.com/mjschultz/swift-te", from: "0.1.0")
+.package(url: "https://github.com/matthewjschultz/swift-te", from: "0.1.0")
 ```
 
 Or, while it's local-only, as a path dependency pointing at a checkout.
@@ -46,12 +46,24 @@ try aiff.write(to: URL(fileURLWithPath: "kit.aif"))
 
 ### OP-XY drum preset
 
+`kick` and `snare` here are `[Float]` buffers of mono PCM. The preset
+builder takes those raw buffers, but the package writer takes encoded
+sample files, so each buffer is written out as a WAV first.
+
 ```swift
+import TECore
 import TEOPXY
 
-let slots = [DrumSlot(samples: kick, sourceSampleRate: 44100, fileName: "kick.wav"), ...]
+let slots = [
+    DrumSlot(samples: kick, sourceSampleRate: 44100, fileName: "kick.wav"),
+    DrumSlot(samples: snare, sourceSampleRate: 44100, fileName: "snare.wav"),
+]
 let preset = DrumPresetBuilder.build(name: "kit", slots: slots)
-let zip = try OPXYPackage.write(preset: preset, samples: [kick, ...], names: ["kick.wav", ...])
+
+let sampleFiles = try slots.map { slot in
+    try WAVFile(sampleRate: slot.sourceSampleRate, bitDepth: 16, channelCount: 1, samples: slot.samples).encoded()
+}
+let zip = try OPXYPackage.write(preset: preset, samples: sampleFiles, names: slots.map(\.fileName))
 try zip.write(to: URL(fileURLWithPath: "kit.preset.zip"))
 ```
 
